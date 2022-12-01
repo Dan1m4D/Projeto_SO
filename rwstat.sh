@@ -301,7 +301,7 @@ maxProc=0
 declare -A procData
 
 # Obter opções do comando incial    
-while getopts "c:s:e:u:m:M:p:wr" commArg; 
+while getopts "c:s:e:u:m:M:p:wrh" commArg; 
 do
     case "${commArg}" in
         # Regex a aplicar sobre o nome do processo
