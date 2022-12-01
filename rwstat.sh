@@ -57,12 +57,18 @@ function generateDataArr() {
         # Só compara os tempos se estes forem restringidos pelo utilizador 
         if [ "${s}" != "0" ] || [ "${e}" != "0" ];then
             dateProcess=$(date -d "${procDate[0]} ${procDate[1]} ${procDate[2]}" +%s)
-            dateStart=$(date -d "${s}" +%s)
-            dateEnd=$(date -d "${e}" +%s)
 
-            # Ignorar as linhas em que a data não está no conjunto específicado
-            if [ $dateProcess -lt $dateStart ] || [ $dateProcess -gt $dateEnd ]; then 
-                continue
+            if [ "${s}" != "0" ];then
+                dateStart=$(date -d "${s}" +%s)
+                if [[ $dateProcess -le $dateStart ]]; then 
+                    continue
+                fi
+            fi
+            if [ "${e}" != "0" ];then
+                dateEnd=$(date -d "${s}" +%s)
+                if [[ $dateProcess -ge $dateEnd ]]; then 
+                    continue
+                fi
             fi
         fi
 
@@ -358,7 +364,7 @@ if [[ "$M" -ne "0" ]] && [[ "$m" -ne "0" ]]; then
     # Asserta que "M" é maior ou igual que "m"
     ((M >= m)) || usage
 fi
-if [[ "$s" -ne "0" ]] && [[ "$e" -ne "0" ]]; then
+if [ "$s" != "0" ] && [ "$e" != "0" ];then
     # Asserta que "s" é menor ou igual a "e"
     (( $(date -d "${s}" +%s) <= $(date -d "${e}" +%s) )) || usage
 fi
