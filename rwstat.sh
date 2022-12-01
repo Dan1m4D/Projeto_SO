@@ -352,7 +352,7 @@ done
 shift $((OPTIND-1))
 
 # Tempo entre as duas leituras das taxas read/write
-updateTime="${*}"      
+updateTime="${*}"
 
 if [[ "$M" -ne "0" ]] && [[ "$m" -ne "0" ]]; then
     # Asserta que "M" é maior ou igual que "m"
@@ -362,7 +362,6 @@ if [[ "$s" -ne "0" ]] && [[ "$e" -ne "0" ]]; then
     # Asserta que "s" é menor ou igual a "e"
     (( $(date -d "${s}" +%s) <= $(date -d "${e}" +%s) )) || usage
 fi
-
 
 #  Testar se o ultimo argumento (segundos entre leituras)
 # não foi utilizado, ou é inválido
@@ -383,16 +382,10 @@ PIdVector=($(sudo ps -Ao pid,user,comm | tail -n +2 |
 #PIdVector=($(pgrep -P 1))
 
 # Gerar a maior parte do array de informação
-t1=$(date +%s%3N)
 generateDataArr procData
-t2=$(date +%s%3N)
-printf "generate $(( t2 - t1 ))\n"
 
 # Ler e fazer a média das taxas read/write
-t1=$(date +%s%3N)
 readWriteData maxProc
-t2=$(date +%s%3N)
-printf "readwrite $(( t2 - t1 ))\n"
 
 # Remover as entradas do array que não interessam
 clearArray procData maxProc
