@@ -65,7 +65,7 @@ function generateDataArr() {
                 fi
             fi
             if [ "${e}" != "0" ];then
-                dateEnd=$(date -d "${s}" +%s)
+                dateEnd=$(date -d "${e}" +%s)
                 if [[ $dateProcess -ge $dateEnd ]]; then 
                     continue
                 fi
