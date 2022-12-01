@@ -26,39 +26,57 @@ usage() {
 function generateDataArr() {
     declare -n dataArray="$1"
     # Número de processos no array
-    procIdsCatched=${#PIdArray[@]}
+    procIdsCatched=${#PIdVector[@]}
 
     # Gerar o array de dados de cada processo
     # for i = [0, 1, ..., procIdsCatched-1]
     for i in $(seq 0 $(( procIdsCatched - 1 ))); do
-        procPId=${PIdArray[$i]}
+        procPId=${PIdVector[$i]}
         
-        # Ignorar os processos a que não se tem acesso
-        if [[ -f "/proc/${procPId}/io" ]]; then
-            if [[ -r "/proc/${procPId}/io" ]]; then
+        # Ignorar os processos a que não se tem acesso (ou não existe) o ficheiro
+        if ! [[ -f "/proc/${procPId}/io" ]]; then
+                continue
+        fi
 
-                # Obter o número de bits lidos e escritos até agora
-                procRead=($(cat /proc/${procPId}/io | awk '$1 == "rchar:" { print $2 }') )
-                procWrite=($(cat /proc/${procPId}/io | awk '$1 == "wchar:" { print $2 }') )
+        # Obter o número de bits lidos e escritos até agora
+        procRead=($(sudo cat /proc/${procPId}/io | grep "rchar" | awk '{ print $2 }') )
+        procWrite=($(sudo cat /proc/${procPId}/io | grep "wchar" | awk '{ print $2 }') )
 
-                # Ignorar processos que não lêm nem escrevem 
-                if [[ $procRead -eq 0  ]] && [[ $procWrite -eq 0 ]]; then
-                    continue
-                fi
+        # Ignorar processos que não lêm nem escrevem 
+        if [[ $procRead -eq 0  ]] && [[ $procWrite -eq 0 ]]; then
+            continue
+        fi
+        
+        # Ignorar as linhas com PId que não estão no conjunto específicadp
+        if ( [[ "$m" -ne "0" ]] && [[ "${procPId}" -lt "$m" ]] ) || ( [[ "$M" -ne "0" ]] && [[ "${procPId}" -gt "$M" ]] ); then 
+            continue
+        fi
+        
+        procDate=($(ls -ld /proc/${procPId} | awk '{ print $6, $7, $8 }'))
 
-                procComm=($(cat /proc/${procPId}/comm))
-                procUser=($(stat --format '%U' /proc/${procPId}))
-                procDate=($(ls -ld /proc/${procPId} | awk '{ print $6, $7, $8 }'))
+        # Só compara os tempos se estes forem restringidos pelo utilizador 
+        if [ "${s}" != "0" ] || [ "${e}" != "0" ];then
+            dateProcess=$(date -d "${procDate[0]} ${procDate[1]} ${procDate[2]}" +%s)
+            dateStart=$(date -d "${s}" +%s)
+            dateEnd=$(date -d "${e}" +%s)
 
-                procData[$maxProc, 0]=${procComm}
-                procData[$maxProc, 1]=${procUser}
-                procData[$maxProc, 2]=${procPId}
-                procData[$maxProc, 7]=${procDate[@]}
-
-                # Num total de processos analisados
-                ((maxProc=maxProc+1))
+            # Ignorar as linhas em que a data não está no conjunto específicado
+            if [ $dateProcess -lt $dateStart ] || [ $dateProcess -gt $dateEnd ]; then 
+                continue
             fi
         fi
+
+        procComm=($(sudo cat /proc/${procPId}/comm))
+        procUser=($(stat --format '%U' /proc/${procPId}))
+
+        procData[$maxProc, 0]=${procComm}
+        procData[$maxProc, 1]=${procUser}
+        procData[$maxProc, 2]=${procPId}
+        procData[$maxProc, 7]=${procDate[@]}
+
+        # Num total de processos analisados
+        ((maxProc=maxProc+1))
+        #fi
     done
 
     return
@@ -71,13 +89,17 @@ function readWriteData() {
     t1=$(date +%s%3N)
 
     for i in $(seq 0 $(( numProcMax - 1 ))); do
+
         procPId=${procData[$i, 2]}
 
-        procRead=($(cat /proc/${procPId}/io | awk '$1 == "rchar:" { print $2 }') )
-        procWrite=($(cat /proc/${procPId}/io | awk '$1 == "wchar:" { print $2 }') )
+        # Ignorar os processos a que não se tem acesso (ou não existe) o ficheiro
+        if ! [[ -f "/proc/${procPId}/io" ]]; then
+                continue
+        fi
 
-        procData[$i, 3]=${procRead#-}
-        procData[$i, 4]=${procWrite#-}
+        procRead=($(sudo cat /proc/${procPId}/io | grep "rchar" | awk '{ print $2 }') )
+        procWrite=($(sudo cat /proc/${procPId}/io | grep "wchar" | awk '{ print $2 }') )
+
         procData[$i, 5]=${procRead#-}
         procData[$i, 6]=${procWrite#-}
     done
@@ -88,19 +110,31 @@ function readWriteData() {
     # Esperar o tempo especificado
     sleep ${sleepTime#-}
 
-    # Fazer as médias de lida/escrita
+    # Reler o número de carateres lido/escrito por processo
     for i in $(seq 0 $(( numProcMax - 1 ))); do
+
         procPId=${procData[$i, 2]}
 
-        procRead=($(cat /proc/${procPId}/io | awk '$1 == "rchar:" { print $2 }') )
-        procWrite=($(cat /proc/${procPId}/io | awk '$1 == "wchar:" { print $2 }') )
+        # Ignorar os processos a que não se tem acesso (ou não existe) o ficheiro
+        if ! [[ -f "/proc/${procPId}/io" ]]; then
+                continue
+        fi
+
+        procRead=($(sudo cat /proc/${procPId}/io | grep "rchar" | awk '{ print $2 }') )
+        procWrite=($(sudo cat /proc/${procPId}/io | grep "wchar" | awk '{ print $2 }') )
+
+        procData[$i, 3]=${procRead#-}
+        procData[$i, 4]=${procWrite#-}
+    done
+
+    # Fazer as médias de lida/escrita
+    for i in $(seq 0 $(( numProcMax - 1 ))); do
 
         # Difrença entre as duas leituras
-        numRead="$(( procRead - procData[$i, 5] ))"
-        numWrite="$(( procWrite - procData[$i, 6] ))"
+        numRead="$(( procData[$i, 3] - procData[$i, 5] ))"
+        numWrite="$(( procData[$i, 4] - procData[$i, 6] ))"
 
         # Taxas lida/escrita
-
         numMedioRead="$(( numRead / updateTime ))"
         numMedioWrite="$(( numWrite / updateTime ))"
 
@@ -110,58 +144,6 @@ function readWriteData() {
         procData[$i, 5]=${numMedioRead#-}
         procData[$i, 6]=${numMedioWrite#-}
     done
-
-    return
-}
-
-# Função que remove a maior parte dos processos baseado nos critérios escolhidos
-function clearArray() {
-    declare -n dataArray=$1
-    declare -A tempArray
-    local numProcs=$2
-    local indexTemp="0"
-
-    # for i = [0, 1, ..., numProcs-1]
-    for i in $(seq 0 $(( numProcs - 1 ))); do
-
-        # Ignorar as linhas não tenham nome (deram erro algures no programa)
-        if [[ -z "${dataArray[$i, 0]}" ]]; then 
-            continue
-        fi
-
-        # Ignorar as linhas que tenham rates Write/Read de 0
-        if [[ "${dataArray[$i, 6]}" -eq 0 ]] || [[ "${dataArray[$i, 5]}" -eq 0 ]]; then 
-            continue
-        fi
-
-        # Ignorar as linhas com PId que não estão no conjunto específicadp
-        if [[ "${dataArray[$i, 2]}" -lt "$m" ]] || [[ "${dataArray[$i,- 2]}" -gt "$M" ]]; then 
-            continue
-        fi
-        
-        dateProcess=$(date -d "${dataArray[$i, 7]}" +%s)
-        dateStart=$(date -d "${s}" +%s)
-        dateEnd=$(date -d "${e}" +%s)
-
-        # Ignorar as linhas em que a data não está no conjunto específicado
-        if [ $dateProcess -lt $dateStart ] || [ $dateProcess -gt $dateEnd ]; then 
-            continue
-        fi
-
-        # Colocar a linha do dataArray no tempArray, agora que sabemos que esta é importante
-        for ((n = 0; n < 8; n++)); do
-            tempArray[$indexTemp, $n]="${dataArray[$i, $n]}"
-        done
-        ((indexTemp=indexTemp+1))
-    done
-
-    # Clonar o array temporário para procData
-    unset procData
-    declare -gA procData
-    for key in "${!tempArray[@]}"; do
-        procData[$key]=${tempArray[$key]}
-    done
-    maxProc=${indexTemp}
 
     return
 }
@@ -198,21 +180,73 @@ function sortArray() {
     return
 }
 
+# Função que remove o resto dos processos baseado nos critérios escolhidos
+function clearArray() {
+    declare -n dataArray=$1
+    declare -A tempArray
+    local numProcs=$2
+    local indexTemp="0"
+
+    # for i = [0, 1, ..., numProcs-1]
+    for i in $(seq 0 $(( numProcs - 1 ))); do
+
+        # Ignorar as linhas que tenham rates Write/Read de 0
+        if [[ "${dataArray[$i, 6]}" -eq 0 ]] || [[ "${dataArray[$i, 5]}" -eq 0 ]]; then 
+            continue
+        fi
+
+        #  Colocar a linha do dataArray no tempArray, 
+        # agora que sabemos que esta é importante
+        for ((n = 0; n < 8; n++)); do
+            tempArray[$indexTemp, $n]="${dataArray[$i, $n]}"
+        done
+        ((indexTemp=indexTemp+1))
+    done
+
+    # Clonar o array temporário para procData
+    unset procData
+    declare -gA procData
+    for key in "${!tempArray[@]}"; do
+        procData[$key]=${tempArray[$key]}
+    done
+    maxProc=${indexTemp}
+
+    return
+}
 
 # Função que imprime o array no formato de tabela
 function printArray() {
-    local nDisplayed=0 # Número de linhas já mostradas
-    local start=0      # Número da linha inicial
-    local increment=1      # Número da linha inicial
-    declare -n local dataArray="$1"
+    declare -n local dataArray="$1"  # Cópia local de procData
+    local start=0          # Número da linha inicial
+    local increment=1      # Incremento (positivo ou negatívo)
     local end=$(( ${#dataArray[@]} / 8 )) # Número da linha final
 
-    # Onde começar/acabar a tabela, definido por "-r"
-    if [ "$r" -eq 1 ]; then
-        start=$(( end - 1 ))
-        end=0
-        increment="-1"
+    # Determinar o fim da tabela caso "-p <int>" seja definido
+    if [[ "$p" -ne "0" ]];then
+        end="$p"
     fi
+
+    # Onde começar/acabar a tabela, caso "-r" seja definido
+    if [ "$r" -eq 1 ]; then
+        start=$(( end -1 )) # Começar no fim do array
+        end="-1"            # Acabar no inicio do array
+        increment="-1"      # Incrementar negatívamente
+    fi
+
+
+    # Se não existir neada no array final
+    if [ "$end" -eq 0 ]; then    printf " ╭"
+        printf "─%0.s" {1..84}
+        printf "╮ \n"
+        printf " │       Não foram encontrados nenhuns processos com os argumentos apresentados       │\n"
+
+        printf " ╰"
+        printf "─%0.s" {1..84}
+        printf "╯ \n"
+        return
+    fi
+
+
 
     printf " ╭"
     printf "─%0.s" {1..115}
@@ -221,22 +255,13 @@ function printArray() {
 
     printf " ╰"
     printf "─%0.s" {1..115}
-    printf "╯ \n"
-    printf " ╭"
+    printf "╯ \n ╭"
     printf "─%0.s" {1..115}
     printf "╮ \n"
 
-    #for j in $(seq $start $end); do       # [ -z "${dataArray[$j, 0]}" ] ||
+    #for j in $(seq $start $end); do       
     for (( j = ${start} ; j != ${end} ; j = ${j} + ${increment} )); do
-
-        # Se já tiverem sido mostradas o número de linhas pretendidas, não mostra mais
-        if [ "$nDisplayed" -ge "$p" ]; then
-            break
-        fi
-
         printf " │ %-18s %-18s %6s %13s %13s %10s %10s %18s │ \n" "${dataArray[$j, 0]}" "${dataArray[$j, 1]}" "${dataArray[$j, 2]}" "${dataArray[$j, 3]}" "${dataArray[$j, 4]}" "${dataArray[$j, 5]}" "${dataArray[$j, 6]}" "${dataArray[$j, 7]}"
-
-        ((nDisplayed=nDisplayed+1))
     done
 
     printf " ╰"
@@ -252,82 +277,73 @@ function printArray() {
 
 
 # Default Values, podem ser sobreescritos pelo utilizador
-c=".*"              # Regex para filtrar processos pelo seu COMM
-u=".*"              # Regex para filtrar processos pelo seu USER
-s="Jan 1 00:00"     # Data mínima inicial dos processos
-e="Dec 31 23:59"    # Data máxima inicial dos processos
-export m=0                 # PID mínimo dos processos
-export M=100000            # PID máximo dos processos
-export p=100               # Num máximo de processos a mostrar
-export w=0                 # Ordenar a tabela pela taxa de escrita
-export r=0                 # Ordenar a tabela inversamente
+c=".*"    # Regex para filtrar processos pelo seu COMM
+u=".*"    # Regex para filtrar processos pelo seu USER
+s="0"     # Data mínima inicial dos processos
+e="0"     # Data máxima inicial dos processos
+m=0      # PID mínimo dos processos
+M=0      # PID máximo dos processos
+p=0      # Num máximo de processos a mostrar
+w=0      # Ordenar a tabela pela taxa de escrita
+r=0      # Ordenar a tabela inversamente
 
 maxProc=0
+
 declare -A procData
 
-# Tempo entre as duas leituras das taxas read/write
-updateTime="${@: -1}"      
-
-numOptArgs="$#"
-
 # Obter opções do comando incial    
-while getopts ":c::s::e::u::m::M::p::wr" commArg; do
+while getopts "c:s:e:u:m:M:p:wr" commArg; 
+do
     case "${commArg}" in
         # Regex a aplicar sobre o nome do processo
         c)
             c=${OPTARG}
-            (( numOptArgs = numOptArgs - 2 ))
+            ;;
+        #  Regex a aplicar sobre o nome do  
+        # utilizador do processo
+        u)
+            u=${OPTARG}
             ;;
         # Data mínima inicial do processo
         s)
             s=${OPTARG}
             (( ${#s} != 0 )) || usage
-            (( numOptArgs = numOptArgs - 2 ))
             ;;  
         # Data máxima inicial do processo
         e)
             e=${OPTARG}
             (( ${#e} != 0 )) || usage
-            (( numOptArgs = numOptArgs - 2 ))
-            ;;
-        # Regex a aplicar sobre o nome do utilizador do processo
-        u)
-            u=${OPTARG}
-            (( numOptArgs = numOptArgs - 2 ))
             ;;
         # Número mínimo do ID do processo
         m)
             m=${OPTARG}
             ((m > 0)) || usage
-            (( numOptArgs = numOptArgs - 2 ))
             ;;
         # Número máximo do ID do processo
         M)
             M=${OPTARG}
-            ((M < 10000)) || usage
-            (( numOptArgs = numOptArgs - 2 ))
+            ((M > 0)) || usage
             ;;
         # Número de processos a mostrar na tabela
         p)
             p=${OPTARG}
             ((p > 0 || p < 1000)) || usage
-            (( numOptArgs = numOptArgs - 2 ))
             ;;
         # Ordenar por leitura (0) ou escrita (1)
         w)
             w=1
-            (( numOptArgs = numOptArgs - 1 ))
             ;;    
-        # Ordenar pelo número maior (0) ou pelo número menor (1)
+        #  Ordenar pelo número maior (0) 
+        # ou pelo número menor (1)
         r)
             r=1
-            (( numOptArgs = numOptArgs - 1 ))
             ;;
-        # Mostrar a usagem caso seja intruduzido opções inválidas
+        # Mostrar a usagem caso seja requesitado
         h)
             usage
             ;;
-        # Mostrar a usagem caso seja intruduzido opções inválidas
+        #  Mostrar a usagem caso seja m
+        # intruduzidas opções inválidas
         *)
             usage
             ;;
@@ -335,26 +351,48 @@ while getopts ":c::s::e::u::m::M::p::wr" commArg; do
 done
 shift $((OPTIND-1))
 
-# Se o ultimo argumento não utilizado, ou for inválido (segundos entre leituras)
-if [[ "$#" -eq 0 ]] || [[ "${updateTime}" =~ '^[0-9]+$'  ]] || [[ "${updateTime}" -lt 1 ]] || [[ "${updateTime}" -gt 1000 ]]; then
+# Tempo entre as duas leituras das taxas read/write
+updateTime="${*}"      
+
+if [[ "$M" -ne "0" ]] && [[ "$m" -ne "0" ]]; then
+    # Asserta que "M" é maior ou igual que "m"
+    ((M >= m)) || usage
+fi
+if [[ "$s" -ne "0" ]] && [[ "$e" -ne "0" ]]; then
+    # Asserta que "s" é menor ou igual a "e"
+    (( $(date -d "${s}" +%s) <= $(date -d "${e}" +%s) )) || usage
+fi
+
+
+#  Testar se o ultimo argumento (segundos entre leituras)
+# não foi utilizado, ou é inválido
+if [[ "$*" -eq "" ]] || [[ "${updateTime}" =~ '^[0-9]+$'  ]] || 
+   [[ "${updateTime}" -lt 1 ]] || [[ "${updateTime}" -gt 1000 ]]; then
     usage
 fi
 
-  #    ps com PID, user, comm | ignorar os do root | ignorar cabeçalho |
-PIdArray=($(ps -Ao pid,user,comm | grep -v root | tail -n +2 | 
-  # user e comm filtrados com regex                    output só os PIDs selecionados
+
+  #         ps com PID, user, comm | ignorar cabeçalho |
+PIdVector=($(sudo ps -Ao pid,user,comm | tail -n +2 | 
     awk -v userName="$u" -v comName="$c" '$3~comName && $2~userName { print $1 }' ))
+  #    user e comm filtrados com regex                  output só os PIDs selecionados
 
 
 
 
-#PIdArray=($(pgrep -P 1))
+#PIdVector=($(pgrep -P 1))
 
 # Gerar a maior parte do array de informação
+t1=$(date +%s%3N)
 generateDataArr procData
+t2=$(date +%s%3N)
+printf "generate $(( t2 - t1 ))\n"
 
 # Ler e fazer a média das taxas read/write
+t1=$(date +%s%3N)
 readWriteData maxProc
+t2=$(date +%s%3N)
+printf "readwrite $(( t2 - t1 ))\n"
 
 # Remover as entradas do array que não interessam
 clearArray procData maxProc
@@ -364,3 +402,5 @@ sortArray procData maxProc
 
 # Apresentar o array na forma tabela
 printArray procData
+
+
