@@ -227,20 +227,14 @@ function printArray() {
     local increment=1      # Incremento (positivo ou negatívo)
     local end=$(( ${#dataArray[@]} / 8 )) # Número da linha final
 
-    # Determinar o fim da tabela caso "-p <int>" seja definido
-    if [[ "$p" -ne "0" ]];then
-        end="$p"
-    fi
-
     # Onde começar/acabar a tabela, caso "-r" seja definido
     if [ "$r" -eq 1 ]; then
         start=$(( end -1 )) # Começar no fim do array
-        end="-1"            # Acabar no inicio do array
+        end="-1"        # Acabar no inicio do array
         increment="-1"      # Incrementar negatívamente
     fi
 
-
-    # Se não existir neada no array final
+    # Se não existir nada no array final
     if [ "$end" -eq 0 ]; then    printf " ╭"
         printf "─%0.s" {1..84}
         printf "╮ \n"
@@ -253,7 +247,7 @@ function printArray() {
     fi
 
 
-
+    # Cabeçalho
     printf " ╭"
     printf "─%0.s" {1..115}
     printf "╮ \n"
@@ -265,9 +259,18 @@ function printArray() {
     printf "─%0.s" {1..115}
     printf "╮ \n"
 
+    local printsShown="1"
+
     #for j in $(seq $start $end); do       
     for (( j = ${start} ; j != ${end} ; j = ${j} + ${increment} )); do
+
         printf " │ %-18s %-18s %6s %13s %13s %10s %10s %18s │ \n" "${dataArray[$j, 0]}" "${dataArray[$j, 1]}" "${dataArray[$j, 2]}" "${dataArray[$j, 3]}" "${dataArray[$j, 4]}" "${dataArray[$j, 5]}" "${dataArray[$j, 6]}" "${dataArray[$j, 7]}"
+        
+        # Determinar o fim da tabela caso "-p <int>" seja definido
+        if [[ "$p" -eq "printsShown" ]];then
+            break
+        fi
+        ((printsShown = printsShown + 1 ))
     done
 
     printf " ╰"
