@@ -390,6 +390,7 @@ PIdVector=($(sudo ps -Ao pid,user,comm | tail -n +2 |
 
 #PIdVector=($(pgrep -P 1))
 
+
 # Gerar a maior parte do array de informação
 generateDataArr procData
 
