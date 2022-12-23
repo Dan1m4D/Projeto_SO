@@ -63,6 +63,7 @@ int main (int argc, char *argv[])
         info;                                                                                               /* info id */
     int c;
 
+
     /* getting log file name */
     if(argc==2) {
         strcpy(nFic, argv[1]);
@@ -75,6 +76,10 @@ int main (int argc, char *argv[])
         exit (EXIT_FAILURE);
     }
     sprintf (num[1], "%d", key);
+
+    /* Isto ??? */
+    shmemDestroy(shmemConnect(key));
+    semDestroy(semConnect(key));
 
     /* creating and initializing the shared memory region and the log file */
     if ((shmid = shmemCreate (key, sizeof (SHARED_DATA))) == -1) { 
@@ -104,9 +109,10 @@ int main (int argc, char *argv[])
     sh->fSt.paymentRequest = 0;
 
     sh->fSt.tableLast = -1;
-
+        
     /* create log file */
-    createLog (nFic);                                  
+    createLog (nFic);              
+      
 
     /* initialize semaphore ids */
     sh->mutex           = MUTEX;                                /* mutual exclusion semaphore id */
@@ -143,6 +149,7 @@ int main (int argc, char *argv[])
                 exit (EXIT_FAILURE);
             }
     }
+
     /* waiter process */
     strcpy (nFicErr + 6, "WT");
     if ((pidWT = fork ()) < 0)  {                            
@@ -155,6 +162,7 @@ int main (int argc, char *argv[])
             exit (EXIT_FAILURE);
         }
     }
+
     /* chef process */
     strcpy (nFicErr + 6, "CH");
     if ((pidCH = fork ()) < 0) {               

@@ -115,23 +115,24 @@ int main (int argc, char *argv[])
  */
 static void waitForOrder ()
 {
-    /* insert your code here */
-
-    if (semDown (semgid, sh->mutex) == -1) {                                                      /* enter critical region */
-        perror ("error on the up operation for semaphore access (PT)");
+    /* enter critical region */
+    if (semDown (semgid, sh->mutex) == -1) {                            
+        perror ("error on the down operation for semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 
     /* Update its state */
-    sh->fSt.st.waiterStat == WAIT_FOR_ORDER;
+    sh->fSt.st.chefStat = WAIT_FOR_ORDER;
 
-    if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
+    /* exit critical region */
+    if (semUp (semgid, sh->mutex) == -1) {                              
         perror ("error on the up operation for semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 
-    if (semDown (semgid, sh->waitOrder) == -1) {                                                      /* exit critical region */
-        perror ("error on the up operation for semaphore access (PT)");
+    /* Wait for an order to be recieved */
+    if (semDown (semgid, sh->waitOrder) == -1) {                                       
+        perror ("error on the down operation for 'waitOrder' semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 }
@@ -143,39 +144,51 @@ static void waitForOrder ()
  *  The internal state should be saved.
  */
 static void processOrder ()
-{
-    if (semDown (semgid, sh->mutex) == -1) {                                                      /* enter critical region */
-        perror ("error on the up operation for semaphore access (PT)");
+{               
+    /* enter critical region */
+    if (semDown (semgid, sh->mutex) == -1) {              
+        perror ("error on the down operation for semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 
     /* Update its state */
-    sh->fSt.st.waiterStat == COOK;
+    sh->fSt.st.chefStat = COOK;
     sh->fSt.foodReady = true;
+    saveState(nFic, &(sh->fSt));
 
-    if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
-        perror ("error on the up operation for semaphore access (PT)");
-        exit (EXIT_FAILURE);
-    }
-
-    /* Signal the waiter that the cook is finished */
-    if (semUp (semgid, sh->mutex) == -1) {
+    /* exit critical region */
+    if (semUp (semgid, sh->mutex) == -1) {       
         perror ("error on the up operation for semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 
     usleep((unsigned int) floor ((MAXCOOK * random ()) / RAND_MAX + 100.0));
 
-    if (semDown (semgid, sh->mutex) == -1) {                                                      /* enter critical region */
-        perror ("error on the up operation for semaphore access (PT)");
+    /* enter critical region */
+    if (semDown (semgid, sh->mutex) == -1) {                                 
+        perror ("error on the down operation for semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 
     /* Update its state */
-    sh->fSt.st.waiterStat == REST;
+    sh->fSt.st.chefStat = REST;
+    saveState(nFic, &(sh->fSt));
 
-    if (semUp (semgid, sh->mutex) == -1) {                                                      /* exit critical region */
+    /* exit critical region */
+    if (semUp (semgid, sh->mutex) == -1) {                
         perror ("error on the up operation for semaphore access (PT)");
+        exit (EXIT_FAILURE);
+    }
+
+    /* Signal the waiter that the cook is finished */
+    if (semUp (semgid, sh->waiterRequest) == -1) {
+        perror ("error on the up operation for 'waiterRequest' semaphore access (PT)");
+        exit (EXIT_FAILURE);
+    }
+
+    /* Wait for waiter to confirm request */
+    if (semDown (semgid, sh->requestReceived) == -1) {      
+        perror ("error on the down operation for 'requestReceived' semaphore access (PT)");
         exit (EXIT_FAILURE);
     }
 }
