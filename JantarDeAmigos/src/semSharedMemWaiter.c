@@ -234,6 +234,7 @@ static void informChef ()
     sh->fSt.st.waiterStat = INFORM_CHEF;
     sh->fSt.foodOrder = true;
     saveState(nFic, &(sh->fSt));
+    sh->fSt.st.waiterStat = WAIT_FOR_REQUEST;
 
     /* exit critical region */
     if (semUp (semgid, sh->mutex) == -1)       
