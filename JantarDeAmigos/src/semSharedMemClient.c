@@ -177,7 +177,8 @@ static bool waitFriends(int id)
     sh->fSt.st.clientStat[id] = WAIT_FOR_FRIENDS;
     sh->fSt.tableClients++;
 
-    /* Check if the Client is the last one and pass him directly to waiting for food and set him as the last one */
+    /* Check if the Client is the last one and pass him directly 
+      to waiting for food and set him as the last one */
     if (sh->fSt.tableClients == TABLESIZE) {
         sh->fSt.st.clientStat[id] = WAIT_FOR_FOOD;
         sh->fSt.tableLast = id;
